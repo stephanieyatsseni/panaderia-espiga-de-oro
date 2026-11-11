@@ -424,4 +424,155 @@
 })();
 </script>
  
+<!-- ASISTENTE LOGISTICO WMS -->
+<style>
+#asistente-wms {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 99999;
+  font-family: Arial, sans-serif;
+}
+#boton-wms {
+  background: #1769aa;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 15px 20px;
+  cursor: pointer;
+  font-size: 15px;
+  box-shadow: 0 4px 15px #0003;
+}
+#chat-wms {
+  display: none;
+  width: 320px;
+  height: 420px;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 25px #0004;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+}
+#cabecera-wms {
+  background: #1769aa;
+  color: white;
+  padding: 17px;
+  font-weight: bold;
+}
+#mensajes-wms {
+  height: 290px;
+  padding: 12px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+.mensaje-wms {
+  padding: 10px;
+  border-radius: 10px;
+  margin: 8px 0;
+  background: #edf3f8;
+}
+.usuario-wms {
+  background: #d8ebff;
+  text-align: right;
+}
+#formulario-wms {
+  display: flex;
+  padding: 8px;
+  border-top: 1px solid #ddd;
+  gap: 5px;
+}
+#entrada-wms {
+  flex: 1;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+#enviar-wms {
+  background: #1769aa;
+  color: white;
+  border: none;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+</style>
+
+<div id="asistente-wms">
+  <div id="chat-wms">
+    <div id="cabecera-wms">
+      🤖 Asistente Logístico IA
+      <span onclick="document.getElementById('chat-wms').style.display='none'"
+      style="float:right;cursor:pointer">✕</span>
+      <div style="font-size:12px;font-weight:normal">
+        ¿Necesitas ayuda con tu bodega?
+      </div>
+    </div>
+
+    <div id="mensajes-wms">
+      <div class="mensaje-wms">
+        ¡Hola! 👋 Soy tu asistente logístico.
+        Puedo orientarte sobre inventario,
+        recepción, almacenamiento y despacho.
+        ¿Qué necesitas?
+      </div>
+    </div>
+
+    <form id="formulario-wms">
+      <input id="entrada-wms"
+        placeholder="Escribe tu pregunta..."
+        autocomplete="off">
+      <button id="enviar-wms" type="submit">Enviar</button>
+    </form>
+  </div>
+
+  <button id="boton-wms"
+    onclick="document.getElementById('chat-wms').style.display='block'">
+    🤖 ¿Necesitas ayuda?
+  </button>
+</div>
+
+<script>
+const formulario = document.getElementById('formulario-wms');
+const entrada = document.getElementById('entrada-wms');
+const mensajes = document.getElementById('mensajes-wms');
+
+formulario.addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const pregunta = entrada.value.trim().toLowerCase();
+  if (!pregunta) return;
+
+  agregarMensaje(entrada.value, true);
+  entrada.value = '';
+
+  let respuesta = 'Puedo ayudarte con inventario, recepción, almacenamiento y despacho. ¿Qué operación necesitas realizar?';
+
+  if (pregunta.includes('inventario') || pregunta.includes('stock')) {
+    respuesta = 'El inventario permite controlar las existencias de productos, consultar cantidades y detectar niveles bajos de stock.';
+  } else if (pregunta.includes('recepción') || pregunta.includes('recepcion')) {
+    respuesta = 'En recepción debes verificar la mercadería recibida, revisar cantidades y registrar su ingreso al almacén.';
+  } else if (pregunta.includes('despacho')) {
+    respuesta = 'En despacho debes verificar el pedido, preparar los productos, comprobar las cantidades y registrar su salida.';
+  } else if (pregunta.includes('almacenamiento') || pregunta.includes('ubicación')) {
+    respuesta = 'El almacenamiento consiste en asignar ubicaciones a los productos para facilitar su identificación y posterior preparación.';
+  } else if (pregunta.includes('picking') || pregunta.includes('pedido')) {
+    respuesta = 'El picking es el proceso de seleccionar y recoger los productos solicitados en un pedido.';
+  } else if (pregunta.includes('ayuda')) {
+    respuesta = '¡Claro! Cuéntame qué módulo del sistema necesitas utilizar y te orientaré paso a paso.';
+  }
+
+  setTimeout(() => agregarMensaje(respuesta, false), 400);
+});
+
+function agregarMensaje(texto, usuario) {
+  const div = document.createElement('div');
+  div.className = 'mensaje-wms' + (usuario ? ' usuario-wms' : '');
+  div.textContent = texto;
+  mensajes.appendChild(div);
+  mensajes.scrollTop = mensajes.scrollHeight;
+}
+</script>
+
 </body></html>
