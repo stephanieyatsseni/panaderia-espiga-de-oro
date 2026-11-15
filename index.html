@@ -1,3 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WMS Espiga de Oro · Control de bodega</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{--g9:#193e32;--g7:#245845;--gold:#d6a644;--cream:#f6f5ef;--line:#dce3d9;--ink:#20312b;--mut:#61716a}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Work Sans",system-ui,sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.5}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{display:flex;min-height:100vh}
+.sidebar{width:248px;flex:none;position:sticky;top:0;height:100vh;background:var(--g9);color:#e8efe9;display:flex;flex-direction:column;padding:20px 14px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;border-bottom:1px solid rgba(214,166,68,.35)}
+.brand strong{display:block;font-size:16px;color:#fff;line-height:1.1}
+.brand span{font-size:11.5px;color:var(--gold);font-weight:600}
+#nav{display:flex;flex-direction:column;gap:2px;margin-top:14px;overflow-y:auto;flex:1}
+.navbtn{text-align:left;width:100%;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:600;color:#c9d8cf;background:transparent;border:0;border-left:3px solid transparent;cursor:pointer}
+.navbtn:hover{background:rgba(255,255,255,.07);color:#fff}
+.navbtn.active{background:rgba(214,166,68,.16);color:#fff;border-left-color:var(--gold)}
+.side-foot{font-size:11.5px;color:#9db3a7;padding:12px 8px 0;border-top:1px solid rgba(255,255,255,.1)}
+.mainarea{flex:1;min-width:0;padding:28px 34px 40px;max-width:1500px}
+.view{display:none}.view.active{display:block}
+.small{font-size:12.5px}.muted{color:var(--mut)}
+.notice{background:#fbf3de;border:1px solid #ecd49a;border-left:4px solid var(--gold);border-radius:12px;padding:10px 14px;color:#4d3b0c}
+.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 1px 2px rgba(16,41,31,.04)}
+.kpi{display:flex;flex-direction:column;gap:4px;border-top:3px solid var(--gold)}
+.kpi strong{font-size:26px;line-height:1.15;color:var(--g9);font-weight:800}
+.kpi:first-child{background:var(--g9);border-color:var(--gold);color:#fff}
+.kpi:first-child strong{color:var(--gold);font-size:30px}
+.kpi:first-child .muted{color:#b9cdc2}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.span2{grid-column:1/-1}
+.fields label,#modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:#3f524a}
+input,select,textarea{font:inherit;font-size:13px;color:var(--ink)}
+.fields input,.fields select,.fields textarea,#modal input,#modal select,#modal textarea{border:1px solid #cbd6cb;border-radius:10px;padding:8px 11px;background:#fff;min-height:38px;width:100%;font-weight:400}
+.btn{background:var(--g7);color:#fff;border:1px solid var(--g7);border-radius:10px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--g9)}
+.btn.alt{background:#fff;color:var(--g9);border-color:#b9c9bb}.btn.alt:hover{background:#edf3e9}
+.btn.warn{background:#a8372a;border-color:#a8372a}
+.btn-xs{background:var(--gold);color:var(--g9);border:0;border-radius:7px;padding:4px 9px;font-size:11.5px;font-weight:700;cursor:pointer}
+.link-btn{background:none;border:0;color:var(--g7);font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer;margin-right:10px;padding:2px 0}
+.link-btn:hover{color:#a8372a}
+.inline-edit{width:100%;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;background:#fff;min-height:32px}
+.inline-edit:hover{border-color:#aebfae}
+.inline-pending{border-color:var(--gold);background:#fffaf0}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:#e2f0e4;color:#1d5a37}
+.pill.alert{background:#fbf1d8;color:#8a5a00}.pill.danger{background:#f9dedb;color:#9b2c1f}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f3f5ee;text-align:left;font-size:11.5px;font-weight:700;color:#3f524a;padding:10px;white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #e9eee7;vertical-align:top}
+tbody tr:hover td{background:#fafbf7}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.rack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.rack-card{border:1px solid #cfdacb;border-radius:14px;overflow:hidden;background:#fff}
+.rack-head{background:var(--g7);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px}
+.rack-level{padding:12px 14px;border-top:1px dashed #cfdacb}
+.loc-tag{background:#fbf1d8;color:#6f4a00;border-radius:6px;padding:2px 8px;font-size:11.5px;font-weight:700;white-space:nowrap}
+#message{position:fixed;top:16px;right:16px;z-index:10001;max-width:360px;padding:12px 16px;border-radius:12px;background:var(--g9);color:#fff;border-left:4px solid var(--gold);box-shadow:0 12px 30px rgba(16,41,31,.3);font-size:13px;font-weight:600}
+#message:empty{display:none}#message.err{background:#8f2a1d;border-left-color:#f1b0a6}
+#modal{position:fixed;inset:0;background:rgba(16,41,31,.55);display:none;align-items:center;justify-content:center;z-index:10000;padding:16px}
+#modal.open{display:flex}
+.modal-box{background:#fff;border-radius:18px;max-width:780px;width:100%;max-height:92vh;overflow:auto;padding:22px;box-shadow:0 30px 70px rgba(0,0,0,.35)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.modal-head h2{font-size:18px;font-weight:800;color:var(--g9)}
+.modal-head button{background:#f3f5ee;border:0;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px}
+@media(max-width:900px){.app{flex-direction:column}.sidebar{width:auto;height:auto;position:static;padding:12px}#nav{flex-direction:row;overflow-x:auto;margin-top:8px}.navbtn{width:auto;white-space:nowrap;border-left:0;border-bottom:3px solid transparent}.navbtn.active{border-bottom-color:var(--gold)}.side-foot{display:none}.mainarea{padding:16px}}
+@media print{.sidebar,.no-print,#wms-ai-launcher,#wms-ai-drawer{display:none!important}.view{display:none}.view.active{display:block}body{background:#fff}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 /* Estilos Copiloto IA */
 #wms-ai-launcher { position: fixed; right: 24px; bottom: 24px; z-index: 9998; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #193e32 0%, #245845 100%); color: #ffffff; border: 1px solid #d6a644; border-radius: 999px; padding: 12px 18px; font-family: "Work Sans", sans-serif; font-size: 13px; font-weight: 700; box-shadow: 0 12px 30px rgba(16, 41, 31, 0.35); cursor: pointer; }
 #wms-ai-badge { position: absolute; top: -5px; right: -4px; background: #d6a644; color: #193e32; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 5px; border: 2px solid #f6f5ef; }
@@ -20,8 +94,23 @@
 .wms-ai-footer { padding: 10px 12px; background: #ffffff; border-top: 1px solid #dce3d9; display: flex; gap: 8px; }
 .wms-ai-footer input { flex: 1; min-height: 38px; border-radius: 10px; border: 1px solid #cbd6cb; padding: 8px 12px; font-size: 13px; }
 .wms-ai-footer button { background: #245845; color: #ffffff; border: none; border-radius: 10px; padding: 0 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
-
-
+#wms-ai-badge[hidden]{display:none}
+#wms-ai-drawer.hidden-ai{visibility:hidden}
+.wms-ai-header button{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer}
+.wms-msg hr{border:0;border-top:1px solid #e3e9e0;margin:8px 0}
+.wms-ai-footer input{min-width:0}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar no-print">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 30V9" stroke="#d6a644" stroke-width="2" stroke-linecap="round"/><path d="M16 11c-4 0-6-3-6-6 4 0 6 2.5 6 6zM16 11c4 0 6-3 6-6-4 0-6 2.5-6 6zM16 18c-4 0-6-3-6-6 4 0 6 2.5 6 6zM16 18c4 0 6-3 6-6-4 0-6 2.5-6 6zM16 25c-4 0-6-3-6-6 4 0 6 2.5 6 6zM16 25c4 0 6-3 6-6-4 0-6 2.5-6 6z" fill="#d6a644"/></svg>
+    <div><strong>Espiga de Oro</strong><span>WMS · Bodega</span></div>
+  </div>
+  <nav id="nav" aria-label="Módulos"></nav>
+  <div class="side-foot">Av. Maestranza 1551<br>San Antonio</div>
+</aside>
 <div class="mainarea">
   <header class="flex flex-wrap justify-between items-start gap-3 mb-5">
     <div>
@@ -239,9 +328,147 @@
     WMS Panadería Espiga de Oro · Avenida Maestranza 1551, sector Barrancas, San Antonio
   </footer>
 </div>
+</div>
 
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-box">
+    <div class="modal-head"><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Cerrar">✕</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
 
+<button id="wms-ai-launcher" type="button" aria-controls="wms-ai-drawer" aria-expanded="false"><span aria-hidden="true">✦</span> Copiloto IA<span id="wms-ai-badge" hidden>0</span></button>
+<aside id="wms-ai-drawer" class="hidden-ai" aria-label="Copiloto IA">
+<div class="wms-ai-header"><div><strong>Copiloto de bodega</strong><div style="font-size:11.5px;opacity:.8">Responde con los datos de tu inventario</div></div><button type="button" id="wms-ai-close" aria-label="Cerrar copiloto">✕</button></div>
+<div class="wms-ai-tabs">
+  <button type="button" class="wms-ai-tab active" data-aitab="chat">Asistente IA</button>
+  <button type="button" class="wms-ai-tab" data-aitab="diag">Auditoría en Vivo</button>
+  <button type="button" class="wms-ai-tab" data-aitab="tours">Guía Rápida</button>
+</div>
+
+<div id="wms-ai-view-chat" class="wms-ai-body"></div>
+<div id="wms-ai-view-diag" class="wms-ai-body" style="display:none;"></div>
+<div id="wms-ai-view-tours" class="wms-ai-body" style="display:none;"></div>
+
+<div class="wms-ai-suggestions">
+  <button type="button" class="wms-sug-pill" data-prompt="¿Cuál es la valorización total de mi bodega?">Valorización ($)</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Dónde está ubicada la harina y el queso?">Buscar en racks</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Qué productos están bajo ROP o por vencer?">Alertas ROP y FEFO</button>
+</div>
+
+<form id="wms-ai-form" class="wms-ai-footer">
+  <input id="wms-ai-input" type="text" placeholder="Pregunta ubicación, precio, stock o vencimiento..." autocomplete="off">
+  <button type="submit">Enviar</button>
+</form>
+</aside>
+<script>
+// ==================== BASE: ESTADO Y UTILIDADES ====================
+const KEY = 'wms-espiga-v2';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL');
+const uid = () => Math.random().toString(36).slice(2, 10);
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const addDays = n => { const d = new Date(today() + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+const days = d => Math.round((new Date(d + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
+const formatLoc = (w, r, l) => [w, r, l].filter(Boolean).join(' · ');
+const options = (arr, sel, blank, blankLabel) => (blank ? `<option value="">${esc(blankLabel || 'Todos')}</option>` : '') + arr.map(x => `<option value="${esc(x)}" ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
+const field = (label, name, val, type = 'text', attrs = '') => `<label for="f-${name}">${label}<input id="f-${name}" name="${name}" type="${type}" value="${esc(val ?? '')}" ${attrs}></label>`;
+const area = (label, name, val) => `<label class="span2" for="f-${name}">${label}<textarea id="f-${name}" name="${name}" rows="3">${esc(val ?? '')}</textarea></label>`;
+const sel = (label, name, arr, val) => `<label for="f-${name}">${label}<select id="f-${name}" name="${name}">${options(arr, val)}</select></label>`;
+
+const modules = [['tablero','Tablero'],['productos','Productos e inventario'],['operaciones','Registrar movimiento'],['lotes','Lotes FEFO / FIFO'],['conteo','Conteo cíclico'],['reposicion','Reposición y ABC'],['ubicaciones','Mapa de bodega'],['proveedores','Proveedores'],['responsables','Responsables'],['reportes','Reportes'],['configuracion','Configuración'],['ayuda','Ayuda']];
+
+let products = [], lots = [], suppliers = [], locations = [], people = [], counts = [], movements = [], settings = {};
+
+function openModal(t, h) { $('#modal-title').textContent = t; $('#modal-body').innerHTML = h; $('#modal').classList.add('open'); }
+function closeModal() { $('#modal').classList.remove('open'); $('#modal-body').innerHTML = ''; }
+let _nt;
+function notify(m, err) {
+  const e = $('#message'); e.textContent = m; e.classList.toggle('err', !!err);
+  clearTimeout(_nt); _nt = setTimeout(() => e.textContent = '', err ? 6000 : 3500);
 }
+function navigate(id) {
+  const m = modules.find(x => x[0] === id); if (!m) return;
+  $$('.view').forEach(v => v.classList.toggle('active', v.id === id));
+  $$('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.go === id));
+  $('#current-title').textContent = m[1];
+  if (id === 'operaciones') renderMoveForm();
+  if (id === 'conteo') renderCountForm();
+  window.scrollTo({top: 0});
+}
+
+// ==================== DATOS BASE (fechas relativas a hoy) ====================
+function seed() {
+  suppliers = [
+    ['Molinos del Pacífico','Lunes y jueves','Martes y viernes',2],
+    ['Lácteos del Maule','Martes y viernes','Miércoles y sábado',2],
+    ['Distribuidora Levaduras Sur','Diario hasta 12:00','Día siguiente',1],
+    ['Abarrotes Maestranza','Lunes','Miércoles',3],
+    ['Avícola Los Maitenes','Miércoles','Jueves',1],
+    ['Frigorífico San Antonio','Lunes y jueves','Martes y viernes',1]
+  ].map(([name, orders, delivery, lead]) => ({id: uid(), name, orders, delivery, lead}));
+  people = [['Camila Rojas','Jefa de bodega'],['Matías Soto','Encargado de recepción'],['Daniela Pino','Maestra panadera']].map(([name, role]) => ({id: uid(), name, role}));
+  const BS = 'Bodega Seca', CR = 'Cámara Refrigerada';
+  locations = [
+    [BS,'Rack A','Nivel 1 (Inferior)','Harinas','Sacos pesados abajo, nunca sobre el piso.'],
+    [BS,'Rack A','Nivel 2 (Medio)','Azúcar y secos','Lejos de la humedad.'],
+    [BS,'Rack A','Nivel 3 (Superior)','Envases','Material liviano.'],
+    [BS,'Rack B','Nivel 1 (Inferior)','Grasas','Manteca y margarinas.'],
+    [BS,'Rack B','Nivel 2 (Medio)','Sal y condimentos','Envases cerrados.'],
+    [BS,'Rack B','Nivel 3 (Superior)','Rellenos y mermeladas','Rotar por fecha.'],
+    [CR,'Rack Frío 1','Nivel 1 (Base)','Levaduras','Entre 2 °C y 6 °C.'],
+    [CR,'Rack Frío 1','Nivel 2 (Medio)','Lácteos y fiambres','Entre 2 °C y 6 °C. FEFO estricto.'],
+    [CR,'Rack Frío 1','Nivel 3 (Superior)','Huevos','Bandejas selladas.']
+  ].map(([warehouse, rack, level, zone, rule]) => ({id: uid(), warehouse, rack, level, zone, rule}));
+  const P = [ // sku, nombre, categoría, unidad, ABC, precio, stock, días a vencer, bodega, rack, nivel, consumo, lead, seguridad, ROP, política, proveedor, estado
+    ['HAR-001','Harina panadera 25 kg','Insumos secos','saco','A',21500,18,120,BS,'Rack A','Nivel 1 (Inferior)',3,2,4,10,'FEFO','Molinos del Pacífico','Disponible'],
+    ['QUE-001','Queso mantecoso laminado','Lácteos','kg','A',7800,12,6,CR,'Rack Frío 1','Nivel 2 (Medio)',2.5,2,3,9,'FEFO','Lácteos del Maule','Disponible'],
+    ['LEV-001','Levadura fresca 500 g','Insumos refrigerados','unidad','A',2300,8,2,CR,'Rack Frío 1','Nivel 1 (Base)',3,1,2,6,'FEFO','Distribuidora Levaduras Sur','Disponible'],
+    ['AZU-001','Azúcar granulada','Insumos secos','kg','B',1250,60,300,BS,'Rack A','Nivel 2 (Medio)',6,3,10,25,'FIFO','Abarrotes Maestranza','Disponible'],
+    ['MAN-001','Manteca vegetal','Grasas','kg','A',2900,14,90,BS,'Rack B','Nivel 1 (Inferior)',4,3,8,20,'FEFO','Abarrotes Maestranza','Disponible'],
+    ['HUE-001','Huevos bandeja 30 u','Insumos refrigerados','bandeja','B',5200,9,12,CR,'Rack Frío 1','Nivel 3 (Superior)',1.5,1,2,5,'FEFO','Avícola Los Maitenes','Disponible'],
+    ['SAL-001','Sal fina 1 kg','Insumos secos','unidad','C',450,20,700,BS,'Rack B','Nivel 2 (Medio)',0.5,3,2,8,'FIFO','Abarrotes Maestranza','Disponible'],
+    ['JAM-001','Jamón cocido laminado','Fiambres','kg','B',6900,4,-1,CR,'Rack Frío 1','Nivel 2 (Medio)',1.2,1,1,4,'FEFO','Frigorífico San Antonio','Disponible'],
+    ['MER-001','Mermelada de damasco 5 kg','Rellenos','balde','C',9800,3,null,BS,'Rack B','Nivel 3 (Superior)',0.3,3,1,2,'FIFO','Por confirmar','Pendiente de confirmar']
+  ];
+  products = []; lots = []; counts = []; movements = [];
+  P.forEach(r => {
+    const pend = r[17] === 'Pendiente de confirmar', exp = r[7] === null ? '' : addDays(r[7]);
+    const p = {id: uid(), sku: r[0], name: r[1], category: r[2], unit: r[3], abc: r[4], price: r[5], stock: r[6], expiry: exp,
+      warehouse: r[8], rack: r[9], level: r[10], location: formatLoc(r[8], r[9], r[10]),
+      daily: r[11], lead: r[12], safety: r[13], rop: r[14], policy: r[15], supplier: r[16],
+      lot: pend ? 'Inicial por verificar' : 'LOT-' + r[0], status: r[17], shelfLife: 0, discountDay: 0, discount: 0, notes: '', active: true, created: addDays(-30)};
+    products.push(p);
+    lots.push({id: uid(), productId: p.id, sku: p.sku, name: p.name, code: p.lot, qty: p.stock, warehouse: p.warehouse, rack: p.rack, level: p.level, location: p.location, received: addDays(-10), expiry: exp, confirmed: !pend});
+  });
+  const q = products.find(p => p.sku === 'QUE-001'), ql = lots.find(l => l.productId === q.id);
+  ql.qty = 6; lots.push({...ql, id: uid(), code: 'LOT-QUE-002', expiry: addDays(20), received: addDays(-3)});
+  const h = products.find(p => p.sku === 'HAR-001'), a = products.find(p => p.sku === 'AZU-001');
+  counts = [
+    {id: uid(), productId: h.id, sku: h.sku, name: h.name, system: 18, physical: 18, date: addDays(-4), responsible: 'Camila Rojas', note: '', adjusted: false},
+    {id: uid(), productId: a.id, sku: a.sku, name: a.name, system: 60, physical: 58, date: addDays(-2), responsible: 'Matías Soto', note: 'Bolsa rota', adjusted: false}
+  ];
+  logMove('Recepción', h, 10, {date: addDays(-10), responsible: 'Matías Soto', lot: 'LOT-HAR-001', document: 'Guía 4521', supplier: h.supplier, note: 'Recepción semanal'});
+  logMove('Producción', h, -4, {date: addDays(-3), responsible: 'Daniela Pino', note: 'Masa del día'});
+  logMove('Merma / baja', q, -1, {date: addDays(-1), responsible: 'Camila Rojas', note: 'Empaque dañado'});
+  products.forEach(p => ensureLocationCatalogExists(p.warehouse, p.rack, p.level));
+  settings = {address: 'Avenida Maestranza 1551, sector Barrancas, San Antonio', targetAccuracy: 98, targetFefo: 95, targetWaste: 10, targetRop: 3, expiryWindow: 3,
+    flourDeliveries: 'Martes y viernes', demandPeaks: '07:00–10:00 y 17:00–19:30', season: 'Mayor demanda en Fiestas Patrias y Navidad',
+    leftovers: 'Sí: pan frío; después, pan rallado', access: 'Solo personal autorizado'};
+}
+function saveState() { try { localStorage.setItem(KEY, JSON.stringify({products, lots, suppliers, locations, people, counts, movements, settings})); } catch (e) {} }
+function loadState() {
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.products) { ({products, lots, suppliers, locations, people, counts, movements, settings} = s); return; } } catch (e) {}
+  seed(); saveState();
+}
+function resetDemoData() {
+  openModal('Restaurar datos base', `<p class="mb-4">Se reemplazarán todos los datos por el ejemplo inicial. ¿Continuar?</p><div class="flex gap-2"><button class="btn warn" id="reset-ok" type="button">Sí, restaurar</button><button class="btn alt" type="button" onclick="closeModal()">Cancelar</button></div>`);
+  $('#reset-ok').onclick = () => { seed(); saveState(); closeModal(); notify('Datos base restaurados.'); renderAll(); };
+}
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 function rowBtns(id, kind) {
   return `<button type="button" class="link-btn" data-action="edit" data-kind="${kind}" data-id="${esc(id)}">Editar</button><button type="button" class="link-btn" data-action="delete" data-kind="${kind}" data-id="${esc(id)}">Eliminar</button>`;
@@ -1448,24 +1675,92 @@ $('#nav').addEventListener('click', e => {
 });
 renderAll();
 
+// ==================== ARRANQUE ====================
+renderMoveForm();
+renderCountForm();
 
-<div class="wms-ai-tabs">
-  <button type="button" class="wms-ai-tab active" data-aitab="chat">Asistente IA</button>
-  <button type="button" class="wms-ai-tab" data-aitab="diag">Auditoría en Vivo</button>
-  <button type="button" class="wms-ai-tab" data-aitab="tours">Guía Rápida</button>
-</div>
+// ==================== COPILOTO IA (local, usa los datos de la bodega) ====================
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const STOP = new Set('que los las del donde esta esta ubicada ubicado cual cuanto cuantos hay precio stock vence vencimiento total mis para por con bodega rack valorizacion productos estan bajo rop queda tengo'.split(' '));
 
-<div id="wms-ai-view-chat" class="wms-ai-body"></div>
-<div id="wms-ai-view-diag" class="wms-ai-body" style="display:none;"></div>
-<div id="wms-ai-view-tours" class="wms-ai-body" style="display:none;"></div>
+function aiSay(role, html, actions = []) {
+  const box = $('#wms-ai-view-chat'), d = document.createElement('div');
+  d.className = 'wms-msg ' + role;
+  d.innerHTML = html + (actions.length ? `<div class="wms-ai-actions">${actions.map(a => `<button type="button" class="wms-chip-btn" data-go-ai="${a[1]}">${esc(a[0])}</button>`).join('')}</div>` : '');
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+function aiFind(q) {
+  const t = norm(q).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !STOP.has(w));
+  return products.filter(p => p.active && t.some(w => norm(p.name + ' ' + p.sku).includes(w) || (w.length > 4 && norm(p.name).includes(w.slice(0, -1)))));
+}
+function aiIssues() {
+  const act = products.filter(p => p.active), live = lots.filter(l => l.qty > 0 && l.expiry);
+  const expired = live.filter(l => days(l.expiry) < 0), soon = live.filter(l => days(l.expiry) >= 0 && days(l.expiry) <= settings.expiryWindow);
+  const rop = act.filter(p => p.stock <= p.rop), pend = act.filter(p => p.status === 'Pendiente de confirmar');
+  const noExp = act.filter(p => !p.expiry), diffs = counts.filter(c => !c.adjusted && Math.abs(c.system - c.physical) > 0.001);
+  return {expired, soon, rop, pend, noExp, diffs, total: expired.length + soon.length + rop.length + pend.length + diffs.length};
+}
+function aiAnswer(q) {
+  const n = norm(q), f = aiFind(q), act = products.filter(p => p.active), I = aiIssues();
+  const card = p => `<strong>${esc(p.name)}</strong> (${esc(p.sku)})<br>📍 ${esc(p.location)}<br>Stock: ${p.stock} ${esc(p.unit)} · ${clp(p.price)} c/u · Vence: ${esc(p.expiry || 'sin fecha')} · ${esc(statusOf(p))}`;
+  if (/valoriz|cuanto vale|valor total|cuanta plata/.test(n) && !f.length) {
+    const tot = act.reduce((s, p) => s + p.stock * p.price, 0), top = [...act].sort((a, b) => b.stock * b.price - a.stock * a.price).slice(0, 3);
+    return [`El inventario activo vale <strong>${clp(tot)}</strong> (${act.length} productos).<br>Los que más pesan: ${top.map(p => `${esc(p.name)} (${clp(p.stock * p.price)})`).join(', ')}.`, [['Ver reporte valorizado', 'reportes']]];
+  }
+  if (/rop|vencer|vencid|alerta|critic|reponer|pedir|urgente/.test(n) && !f.length) {
+    const L = [...I.expired.map(l => `⚠️ Vencido: ${esc(l.sku)} lote ${esc(l.code)} en ${esc(l.location)}`), ...I.soon.map(l => `⏳ Vence ${esc(l.expiry)}: ${esc(l.sku)} en ${esc(l.location)}`), ...I.rop.map(p => `📦 Bajo ROP: ${esc(p.name)} (${p.stock}/${p.rop})`)];
+    return [L.length ? L.slice(0, 8).join('<br>') : 'Todo en orden: no hay productos bajo ROP ni lotes por vencer.', [['Ver reposición', 'reposicion'], ['Ver lotes', 'lotes']]];
+  }
+  if (/pendiente|confirmar|sin fecha/.test(n)) return [I.pend.length ? `Faltan por confirmar:<br>${I.pend.map(p => '📝 ' + esc(p.name)).join('<br>')}` : 'No hay productos pendientes de confirmar ✓', [['Ir a productos', 'productos']]];
+  if (f.length) return [f.slice(0, 4).map(card).join('<hr>'), [['Ver mapa de bodega', 'ubicaciones']]];
+  return ['Puedo decirte dónde está un producto, su stock, precio o vencimiento, la valorización y las alertas. Prueba con “¿dónde está la harina?”.', []];
+}
+function aiSend(q) {
+  q = q.trim(); if (!q) return;
+  aiSay('user', esc(q));
+  const [html, acts] = aiAnswer(q); setTimeout(() => aiSay('bot', html, acts), 250);
+}
+function aiRefresh() {
+  const I = aiIssues(), b = $('#wms-ai-badge');
+  b.textContent = I.total; b.hidden = !I.total;
+  const row = (ic, txt, go) => `<div class="wms-msg bot">${ic} ${txt}${go ? `<div class="wms-ai-actions"><button type="button" class="wms-chip-btn" data-go-ai="${go[1]}">${go[0]}</button></div>` : ''}</div>`;
+  const rows = [];
+  if (I.expired.length) rows.push(row('⚠️', `<strong>${I.expired.length}</strong> lote(s) vencido(s). Sácalos de la venta o regístralos como merma.`, ['Ver lotes', 'lotes']));
+  if (I.soon.length) rows.push(row('⏳', `<strong>${I.soon.length}</strong> lote(s) vencen en ${settings.expiryWindow} días o menos. Úsalos primero (FEFO).`, ['Ver lotes', 'lotes']));
+  if (I.rop.length) rows.push(row('📦', `<strong>${I.rop.length}</strong> producto(s) bajo el punto de reposición.`, ['Ver reposición', 'reposicion']));
+  if (I.pend.length) rows.push(row('📝', `<strong>${I.pend.length}</strong> producto(s) pendientes de confirmar.`, ['Confirmar', 'productos']));
+  if (I.diffs.length) rows.push(row('🔢', `<strong>${I.diffs.length}</strong> diferencia(s) de conteo sin ajustar.`, ['Ir a conteo', 'conteo']));
+  $('#wms-ai-view-diag').innerHTML = rows.join('') || row('✅', 'Sin problemas detectados. La bodega está al día.');
+}
+const _renderAll = renderAll;
+renderAll = function () { _renderAll(); aiRefresh(); };
 
-<div class="wms-ai-suggestions">
-  <button type="button" class="wms-sug-pill" data-prompt="¿Cuál es la valorización total de mi bodega?">Valorización ($)</button>
-  <button type="button" class="wms-sug-pill" data-prompt="¿Dónde está ubicada la harina y el queso?">Buscar en racks</button>
-  <button type="button" class="wms-sug-pill" data-prompt="¿Qué productos están bajo ROP o por vencer?">Alertas ROP y FEFO</button>
-</div>
+$('#wms-ai-view-tours').innerHTML = [
+  ['Registrar una recepción', 'Elige “Recepción”, completa proveedor, guía, lote, vencimiento y ubicación.', 'operaciones'],
+  ['Cambiar un precio o vencimiento', 'Edita directamente en la tabla de productos; se guarda solo.', 'productos'],
+  ['Reubicar un producto', 'En el mapa, usa “Mover a” dentro de la tarjeta del producto.', 'ubicaciones'],
+  ['Hacer un conteo cíclico', 'Registra el conteo físico y autoriza el ajuste si hay diferencia.', 'conteo']
+].map(t => `<div class="wms-msg bot"><strong>${t[0]}</strong><br>${t[1]}<div class="wms-ai-actions"><button type="button" class="wms-chip-btn" data-go-ai="${t[2]}">Ir allí</button></div></div>`).join('');
 
-<form id="wms-ai-form" class="wms-ai-footer">
-  <input id="wms-ai-input" type="text" placeholder="Pregunta ubicación, precio, stock o vencimiento..." autocomplete="off">
-  <button type="submit">Enviar</button>
-</form>
+function aiToggle(open) {
+  const d = $('#wms-ai-drawer'); d.classList.toggle('hidden-ai', !open);
+  $('#wms-ai-launcher').setAttribute('aria-expanded', open);
+  if (open) $('#wms-ai-input').focus();
+}
+$('#wms-ai-launcher').onclick = () => aiToggle($('#wms-ai-drawer').classList.contains('hidden-ai'));
+$('#wms-ai-close').onclick = () => aiToggle(false);
+$$('.wms-ai-tab').forEach(t => t.onclick = () => {
+  $$('.wms-ai-tab').forEach(x => x.classList.toggle('active', x === t));
+  ['chat', 'diag', 'tours'].forEach(k => $('#wms-ai-view-' + k).style.display = k === t.dataset.aitab ? '' : 'none');
+});
+$$('.wms-sug-pill').forEach(b => b.onclick = () => aiSend(b.dataset.prompt));
+$('#wms-ai-form').onsubmit = e => { e.preventDefault(); const i = $('#wms-ai-input'); aiSend(i.value); i.value = ''; };
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-go-ai]');
+  if (b) { navigate(b.dataset.goAi); if (innerWidth < 700) aiToggle(false); }
+});
+aiSay('bot', 'Hola 👋 Soy el copiloto de la bodega. Pregúntame por ubicación, stock, precio o vencimiento de cualquier producto.');
+aiRefresh();
+</script>
+</body>
+</html>
