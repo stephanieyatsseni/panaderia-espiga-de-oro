@@ -365,7 +365,28 @@ tbody tr:hover td{background:#fafbf7}
   <input id="wms-ai-input" type="text" placeholder="Pregunta ubicación, precio, stock o vencimiento..." autocomplete="off">
   <button type="submit">Enviar</button>
 </form>
-</aside>
+</aside> </aside>
+
+<!-- Firebase: agregar aquí, antes del script principal -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "wms-espiga-de-oro.firebaseapp.com",
+    projectId: "wms-espiga-de-oro",
+    storageBucket: "wms-espiga-de-oro.firebasestorage.app",
+    messagingSenderId: "397470803061",
+    appId: "1:397470803061:web:28cd402d1037cb3e54843c",
+    measurementId: "G-4HFDPB892Q"
+  };
+
+  const firebaseApp = firebase.initializeApp(firebaseConfig);
+  const firestoreDb = firebase.firestore();
+</script>
+
+<!-- Este es tu script original: déjalo intacto -->
+<script>
 <script>
 // ==================== BASE: ESTADO Y UTILIDADES ====================
 const KEY = 'wms-espiga-v4';
