@@ -371,25 +371,28 @@ body:not(.cloud-authenticated) .app,body:not(.cloud-authenticated) #modal,body:n
 
 <button id="wms-ai-launcher" type="button" aria-controls="wms-ai-drawer" aria-expanded="false"><span aria-hidden="true">✦</span> Copiloto IA<span id="wms-ai-badge" hidden>0</span></button>
 <aside id="wms-ai-drawer" class="hidden-ai" aria-label="Copiloto IA">
-<div class="wms-ai-header"><div><strong>Copiloto de bodega</strong><div style="font-size:11.5px;opacity:.8">Responde con los datos de tu inventario</div></div><button type="button" id="wms-ai-close" aria-label="Cerrar copiloto">✕</button></div>
+<div class="wms-ai-header"><div><strong>Copiloto de bodega</strong><div style="font-size:11.5px;opacity:.8">Análisis basado en los datos actuales del WMS</div></div><button type="button" id="wms-ai-close" aria-label="Cerrar copiloto">✕</button></div>
 <div class="wms-ai-tabs">
   <button type="button" class="wms-ai-tab active" data-aitab="chat">Asistente IA</button>
   <button type="button" class="wms-ai-tab" data-aitab="diag">Auditoría en Vivo</button>
   <button type="button" class="wms-ai-tab" data-aitab="tours">Guía Rápida</button>
 </div>
 
-<div id="wms-ai-view-chat" class="wms-ai-body"></div>
+<div id="wms-ai-view-chat" class="wms-ai-body" role="log" aria-live="polite" aria-label="Conversación con el copiloto"></div>
 <div id="wms-ai-view-diag" class="wms-ai-body" style="display:none;"></div>
 <div id="wms-ai-view-tours" class="wms-ai-body" style="display:none;"></div>
 
 <div class="wms-ai-suggestions">
-  <button type="button" class="wms-sug-pill" data-prompt="¿Cuál es la valorización total de mi bodega?">Valorización ($)</button>
-  <button type="button" class="wms-sug-pill" data-prompt="¿Dónde está ubicada la harina y el queso?">Buscar en racks</button>
-  <button type="button" class="wms-sug-pill" data-prompt="¿Qué productos están bajo ROP o por vencer?">Alertas ROP y FEFO</button>
+  <button type="button" class="wms-sug-pill" data-prompt="Dame un resumen del inventario">Resumen</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Qué productos debo reponer primero?">Reposición</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Qué lotes están vencidos o por vencer?">Alertas FEFO</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Cuáles fueron los últimos movimientos?">Movimientos</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Qué conteos tienen diferencias?">Conteos</button>
+  <button type="button" class="wms-sug-pill" data-prompt="¿Dónde está ubicada la harina integral?">Ubicación</button>
 </div>
 
 <form id="wms-ai-form" class="wms-ai-footer">
-  <input id="wms-ai-input" type="text" placeholder="Pregunta ubicación, precio, stock o vencimiento..." autocomplete="off">
+  <input id="wms-ai-input" type="text" placeholder="Consulta inventario, FEFO, reposición, proveedores, movimientos o conteos..." aria-label="Escribe tu consulta para el copiloto" autocomplete="off">
   <button type="submit">Enviar</button>
 </form>
 </aside>
@@ -1891,7 +1894,11 @@ renderCountForm();
 
 // ==================== COPILOTO IA ====================
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-const STOP = new Set('que los las del donde esta esta ubicada ubicado cual cuanto cuantos hay precio stock vence vencimiento total mis para por con bodega rack valorizacion productos estan bajo rop queda tengo'.split(' '));
+const AI_STOP_WORDS = new Set('a al algo algun alguna algunos algunas ahora ayuda articulo articulos bajo bajos bodega bodegas buen buenas bueno buenos buscar cambio cambios cantidad cantidades como con cual cuales cuanto cuanta cuantos cuesta costos cuando dame de del desde debo donde el ella en es esta estan existe existen fecha fechas fue fueron hay historial la las lista listar lo los mas me mi mis movimiento movimientos necesito nivel niveles no nombre nuevo nuevos o para por precio primero producto productos pronto proximo proximos proveedor proveedores que quien quienes quiero rack racks registrado registrados registrada registradas resumen seccion sin sobre son stock su suministra suministran suministro sus tengo total un una ubicacion ubicaciones valor valorizacion vencen vencer vencimiento vencimientos vencido vencidos vence ver y entrega entregan entregas'.split(' '));
+
+function aiTerms(q) {
+  return norm(q).split(/[^a-z0-9]+/).filter(word => word.length > 1 && !AI_STOP_WORDS.has(word));
+}
 
 function aiSay(role, html, actions = []) {
   const box = $('#wms-ai-view-chat'), d = document.createElement('div');
@@ -1899,57 +1906,263 @@ function aiSay(role, html, actions = []) {
   d.innerHTML = html + (actions.length ? `<div class="wms-ai-actions">${actions.map(a => `<button type="button" class="wms-chip-btn" data-go-ai="${a[1]}">${esc(a[0])}</button>`).join('')}</div>` : '');
   box.appendChild(d); box.scrollTop = box.scrollHeight;
 }
+
 function aiFind(q) {
-  const t = norm(q).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !STOP.has(w));
-  return products.filter(p => p.active && t.some(w => norm(p.name + ' ' + p.sku).includes(w) || (w.length > 4 && norm(p.name).includes(w.slice(0, -1)))));
+  const query = norm(q), terms = aiTerms(q);
+  if (!terms.length) return [];
+  return products.map(product => {
+    const name = norm(product.name), sku = norm(product.sku);
+    const searchable = norm([product.name, product.sku, product.category, product.supplier, product.warehouse, product.rack, product.level].join(' '));
+    let score = sku && query.includes(sku) ? 100 : 0;
+    if (name.length > 3 && query.includes(name)) score += 70;
+    terms.forEach(term => {
+      if (sku.includes(term)) score += 12;
+      else if (name.split(' ').some(word => word === term)) score += 8;
+      else if (name.includes(term)) score += 5;
+      else if (searchable.includes(term)) score += 2;
+    });
+    return {product, score};
+  }).filter(result => result.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(result => result.product);
 }
+
 function aiIssues() {
-  const act = products.filter(p => p.active), live = lots.filter(l => l.qty > 0 && l.expiry);
-  const expired = live.filter(l => days(l.expiry) < 0), soon = live.filter(l => days(l.expiry) >= 0 && days(l.expiry) <= settings.expiryWindow);
-  const rop = act.filter(p => p.stock <= p.rop), pend = act.filter(p => p.status === 'Pendiente de confirmar');
-  const noExp = act.filter(p => !p.expiry), diffs = counts.filter(c => !c.adjusted && Math.abs(c.system - c.physical) > 0.001);
-  return {expired, soon, rop, pend, noExp, diffs, total: expired.length + soon.length + rop.length + pend.length + diffs.length};
+  const active = products.filter(p => p.active !== false);
+  const liveLots = lots.filter(l => Number(l.qty) > 0);
+  const windowDays = Math.max(0, Number(settings.expiryWindow ?? 3));
+  const validExpiryLots = liveLots.filter(l => l.expiry && Number.isFinite(days(l.expiry)));
+  const expired = validExpiryLots.filter(l => days(l.expiry) < 0).sort((a, b) => a.expiry.localeCompare(b.expiry));
+  const soon = validExpiryLots.filter(l => days(l.expiry) >= 0 && days(l.expiry) <= windowDays).sort((a, b) => a.expiry.localeCompare(b.expiry));
+  const lowStock = active.filter(p => Number.isFinite(Number(p.stock)) && Number.isFinite(Number(p.rop)) && Number(p.stock) <= Number(p.rop));
+  const pendingProducts = active.filter(p => p.status === 'Pendiente de confirmar');
+  const unconfirmedLots = liveLots.filter(l => !l.confirmed || !l.expiry || !Number.isFinite(days(l.expiry)));
+  const noExpiry = active.filter(p => !p.expiry);
+  const countDifferences = counts.filter(c => !c.adjusted && Math.abs(Number(c.system) - Number(c.physical)) > 0.001);
+  const missingSupplier = active.filter(p => !String(p.supplier || '').trim());
+  const total = expired.length + soon.length + lowStock.length + pendingProducts.length + unconfirmedLots.length + noExpiry.length + countDifferences.length + missingSupplier.length;
+  return {active, expired, soon, lowStock, pendingProducts, unconfirmedLots, noExpiry, countDifferences, missingSupplier, total, windowDays};
 }
+
+const aiNumber = value => (Number(value) || 0).toLocaleString('es-CL', {maximumFractionDigits: 3});
+
+function aiProductLots(product) {
+  return lots.filter(l => l.productId === product.id || (!l.productId && norm(l.sku) === norm(product.sku)));
+}
+
+function aiProductCard(product) {
+  const productLots = aiProductLots(product).filter(l => Number(l.qty) > 0);
+  const nextLot = productLots.filter(l => l.expiry && Number.isFinite(days(l.expiry))).sort((a, b) => a.expiry.localeCompare(b.expiry))[0];
+  const expiry = nextLot ? `${esc(nextLot.expiry)} · lote ${esc(nextLot.code || 'sin código')}` : (product.expiry ? esc(product.expiry) : 'Sin fecha registrada');
+  return `<div><strong>${esc(product.name)}</strong> · SKU ${esc(product.sku)}<br>
+    Stock: <strong>${aiNumber(product.stock)} ${esc(product.unit || 'unid.')}</strong> · Estado: ${esc(statusOf(product))}<br>
+    Categoría: ${esc(product.category || 'Sin categoría')} · Ubicación: ${esc(product.location || 'Sin ubicación')}<br>
+    Precio unitario: ${clp(product.price)} · Valor del stock: ${clp(Number(product.stock || 0) * Number(product.price || 0))}<br>
+    Reposición: ${aiNumber(product.stock)} / ROP ${aiNumber(product.rop)} · Rotación ${esc(product.policy || 'sin definir')}<br>
+    Proveedor: ${esc(product.supplier || 'Sin proveedor')} · Próximo vencimiento: ${expiry}
+    ${product.notes ? `<br>Observaciones: ${esc(product.notes)}` : ''}</div>`;
+}
+
+function aiLotLine(lot) {
+  const remaining = lot.expiry && Number.isFinite(days(lot.expiry)) ? days(lot.expiry) : null;
+  const expiryText = remaining === null ? 'Sin vencimiento válido' :
+    remaining < 0 ? `Vencido hace ${aiNumber(Math.abs(remaining))} día(s)` :
+    remaining === 0 ? 'Vence hoy' : `Vence en ${aiNumber(remaining)} día(s)`;
+  return `<li><strong>${esc(lot.sku)} · ${esc(lot.name)}</strong> — lote ${esc(lot.code || 'sin código')}: ${aiNumber(lot.qty)} ${esc(lot.unit || 'unid.')} · ${esc(lot.location || 'Sin ubicación')} · ${expiryText} (${esc(lot.expiry || 'sin fecha')})</li>`;
+}
+
+function aiInventorySummary() {
+  const active = products.filter(p => p.active !== false);
+  const units = new Map();
+  active.forEach(p => {
+    const unit = p.unit || 'unidad';
+    units.set(unit, (units.get(unit) || 0) + (Number(p.stock) || 0));
+  });
+  const unitSummary = [...units.entries()].map(([unit, quantity]) => `${aiNumber(quantity)} ${esc(unit)}`).join(' · ') || 'Sin existencias registradas';
+  const value = active.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.price) || 0), 0);
+  const byABC = ['A', 'B', 'C'].map(group => `${group}: ${active.filter(p => p.abc === group).length}`).join(' · ');
+  const issues = aiIssues();
+  return `<strong>Resumen del inventario activo</strong><br>
+    Productos activos: ${active.length}<br>
+    Existencias (separadas por unidad): ${unitSummary}<br>
+    Valorización estimada: <strong>${clp(value)}</strong><br>
+    Clasificación ABC: ${byABC}<br>
+    Alertas: ${issues.lowStock.length} bajo/s en ROP · ${issues.expired.length} lote(s) vencido(s) · ${issues.soon.length} por vencer en ${issues.windowDays} día(s).`;
+}
+
+function aiReorderAnswer(scope = products) {
+  const items = scope.filter(p => p.active !== false && Number(p.stock) <= Number(p.rop))
+    .map(p => {
+      const autoQty = Math.max(0, Math.ceil(2 * Number(p.rop || 0) - Number(p.stock || 0)));
+      const qty = p.manualReorderQty == null ? autoQty : Number(p.manualReorderQty);
+      const cost = p.manualReorderCost == null ? qty * Number(p.price || 0) : Number(p.manualReorderCost);
+      return {product: p, qty, cost, shortage: Number(p.rop || 0) - Number(p.stock || 0)};
+    }).sort((a, b) => b.shortage - a.shortage);
+  if (!items.length) return 'No hay productos activos bajo su punto de reposición.';
+  const rows = items.slice(0, 8).map(item =>
+    `<li><strong>${esc(item.product.name)}</strong> (${esc(item.product.sku)}): ${aiNumber(item.product.stock)} / ROP ${aiNumber(item.product.rop)} ${esc(item.product.unit)} · sugerido: ${aiNumber(item.qty)} · costo estimado: ${clp(item.cost)} · proveedor: ${esc(item.product.supplier || 'Sin proveedor')}</li>`
+  ).join('');
+  return `<strong>${items.length} producto(s) requieren revisión de reposición.</strong><ul>${rows}</ul><small>La cantidad automática sigue el criterio de pedido sugerido del WMS; revisa disponibilidad y proveedor antes de confirmar la compra.</small>`;
+}
+
 function aiAnswer(q) {
-  const n = norm(q), f = aiFind(q), act = products.filter(p => p.active), I = aiIssues();
-  const card = p => `<strong>${esc(p.name)}</strong> (${esc(p.sku)})<br>📍 ${esc(p.location)}<br>Stock: ${p.stock} ${esc(p.unit)} · ${clp(p.price)} c/u · Vence: ${esc(p.expiry || 'sin fecha')} · ${esc(statusOf(p))}`;
-  if (/valoriz|cuanto vale|valor total|cuanta plata/.test(n) && !f.length) {
-    const tot = act.reduce((s, p) => s + p.stock * p.price, 0), top = [...act].sort((a, b) => b.stock * b.price - a.stock * a.price).slice(0, 3);
-    return [`El inventario activo vale <strong>${clp(tot)}</strong> (${act.length} productos).<br>Los que más pesan: ${top.map(p => `${esc(p.name)} (${clp(p.stock * p.price)})`).join(', ')}.`, [['Ver reporte valorizado', 'reportes']]];
+  const n = norm(q), terms = aiTerms(q), matches = aiFind(q), issues = aiIssues();
+  const has = pattern => pattern.test(n);
+
+  if (has(/^(hola|buenos dias|buenas tardes|buenas noches|gracias|ayuda)\b/) || has(/que puedes hacer|como funciona|que informacion|que sabes/)) {
+    return ['Puedo consultar los datos actuales del WMS: existencias, productos y ubicaciones, lotes FEFO, vencimientos, reposición, valorización, proveedores, movimientos y conteos. También explico ROP, FIFO y FEFO. Prueba con “¿qué debo reponer?” o busca por nombre o SKU.', [['Ver inventario', 'productos'], ['Ver alertas', 'lotes']]];
   }
-  if (/rop|vencer|vencid|alerta|critic|reponer|pedir|urgente/.test(n) && !f.length) {
-    const L = [...I.expired.map(l => `⚠️ Vencido: ${esc(l.sku)} lote ${esc(l.code)} en ${esc(l.location)}`), ...I.soon.map(l => `⏳ Vence ${esc(l.expiry)}: ${esc(l.sku)} en ${esc(l.location)}`), ...I.rop.map(p => `📦 Bajo ROP: ${esc(p.name)} (${p.stock}/${p.rop})`)];
-    return [L.length ? L.slice(0, 8).join('<br>') : 'Todo en orden: no hay productos bajo ROP ni lotes por vencer.', [['Ver reposición', 'reposicion'], ['Ver lotes', 'lotes']]];
+  if (has(/agregar|crear|nuevo producto|editar producto|cambiar nombre|eliminar producto|borrar producto/)) {
+    return ['Para agregar o editar un producto, abre <strong>Productos e inventario</strong> y usa <strong>+ Nuevo producto</strong> o <strong>Ficha</strong> en su fila. Para quitarlo, usa <strong>Eliminar</strong>; el WMS conserva el movimiento de eliminación en el historial.', [['Ir a productos', 'productos']]];
   }
-  if (/pendiente|confirmar|sin fecha/.test(n)) return [I.pend.length ? `Faltan por confirmar:<br>${I.pend.map(p => '📝 ' + esc(p.name)).join('<br>')}` : 'No hay productos pendientes de confirmar ✓', [['Ir a productos', 'productos']]];
-  if (f.length) return [f.slice(0, 4).map(card).join('<hr>'), [['Ver mapa de bodega', 'ubicaciones']]];
-  return ['Puedo decirte dónde está un producto, su stock, precio o vencimiento, la valorización y las alertas. Prueba con “¿dónde está la harina?”.', []];
+  if (has(/que significa rop|que es rop|calcular rop/)) {
+    return ['El ROP (punto de reposición) es el nivel que dispara una compra. En este WMS se calcula como consumo diario × plazo de entrega + stock de seguridad. La cantidad sugerida se revisa en <strong>Reposición y ABC</strong>.', [['Ver reposición', 'reposicion']]];
+  }
+  if (has(/que significa fefo|que es fefo|que significa fifo|que es fifo/)) {
+    return ['FEFO prioriza el lote que vence primero; FIFO prioriza el lote que ingresó primero. La política asignada a cada producto se consulta en su ficha y se utiliza al descontar existencias.', [['Ver lotes', 'lotes'], ['Ver productos', 'productos']]];
+  }
+  if (has(/sin proveedor|sin suministrador/)) {
+    const missing = issues.missingSupplier;
+    const list = missing.slice(0, 10).map(p => `<li>${esc(p.name)} (${esc(p.sku)})</li>`).join('');
+    return [missing.length ? `<strong>${missing.length} producto(s) sin proveedor asignado</strong><ul>${list}</ul>` : 'Todos los productos activos tienen un proveedor asignado.', [['Ver productos', 'productos']]];
+  }
+  if (has(/sin vencimiento|sin fecha|pendiente|por confirmar|no confirmado/)) {
+    const list = issues.noExpiry.map(p => `<li>${esc(p.name)} (${esc(p.sku)}) · ${aiNumber(p.stock)} ${esc(p.unit)}</li>`);
+    issues.pendingProducts.forEach(p => list.push(`<li>${esc(p.name)} (${esc(p.sku)}) · producto pendiente de confirmar</li>`));
+    issues.unconfirmedLots.slice(0, 8).forEach(l => list.push(aiLotLine(l)));
+    return [list.length ? `<strong>${list.length} registro(s) requieren revisión</strong><ul>${list.slice(0, 12).join('')}</ul>` : 'No hay productos o lotes pendientes de confirmar ni productos sin vencimiento registrado.', [['Revisar productos', 'productos'], ['Revisar lotes', 'lotes']]];
+  }
+  if (has(/proveedor|proveedores|suministr|entrega|entregas/)) {
+    const productSuppliers = matches.map(p => p.supplier).filter(Boolean);
+    const supplierTerms = terms.filter(term => !matches.some(p => norm(p.name).includes(term) || norm(p.sku).includes(term)));
+    let selected = suppliers.filter(s => productSuppliers.some(name => norm(name) === norm(s.name)) || supplierTerms.some(term => norm(s.name).includes(term)));
+    if (!selected.length && !supplierTerms.length) selected = suppliers;
+    if (!selected.length) return ['No encuentro un proveedor con ese nombre en el catálogo. Puedes revisar el listado en <strong>Proveedores</strong>.', [['Ver proveedores', 'proveedores']]];
+    const rows = selected.slice(0, 8).map(s => {
+      const supplied = products.filter(p => norm(p.supplier) === norm(s.name));
+      return `<li><strong>${esc(s.name)}</strong> · pedido: ${esc(s.orders || 'sin calendario')} · entrega: ${esc(s.delivery || 'sin calendario')} · plazo: ${aiNumber(s.lead)} día(s) · productos: ${supplied.length ? supplied.map(p => esc(p.name)).join(', ') : 'ninguno asociado'}</li>`;
+    }).join('');
+    return [`<strong>Información de proveedores</strong><ul>${rows}</ul><small>El catálogo no registra teléfonos ni correos de contacto.</small>`, [['Ver proveedores', 'proveedores']]];
+  }
+  if (has(/movimiento|historial|recepcion|venta|produccion|merma|transferencia/)) {
+    let rows = matches.length
+      ? movements.filter(m => matches.some(p => norm(m.sku) === norm(p.sku) || norm(m.name) === norm(p.name)))
+      : movements;
+    rows = [...rows].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 7);
+    if (!rows.length) return ['No hay movimientos registrados para esa consulta.', [['Registrar movimiento', 'operaciones']]];
+    const list = rows.map(m => `<li>${esc(m.date)} · <strong>${esc(m.type)}</strong> · ${esc(m.sku)} ${esc(m.name)} · ${aiNumber(m.qty)} ${esc(m.unit)} · ${esc(m.location || 'Sin ubicación')} · responsable: ${esc(m.responsible || 'No indicado')}${m.note ? ` · ${esc(m.note)}` : ''}</li>`).join('');
+    return [`<strong>Últimos ${rows.length} movimiento(s)</strong><ul>${list}</ul>`, [['Ver reportes', 'reportes'], ['Registrar movimiento', 'operaciones']]];
+  }
+  if (has(/conteo|diferencia|discrepancia|fisico/)) {
+    const relevantCounts = matches.length
+      ? counts.filter(c => matches.some(p => p.id === c.productId || norm(p.sku) === norm(c.sku)))
+      : counts;
+    const rows = [...relevantCounts].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+    if (!rows.length) return ['Todavía no hay conteos cíclicos registrados.', [['Ir a conteo', 'conteo']]];
+    const list = rows.map(c => {
+      const difference = Number(c.physical) - Number(c.system);
+      return `<li>${esc(c.date)} · <strong>${esc(c.name)} (${esc(c.sku)})</strong> · sistema: ${aiNumber(c.system)} · físico: ${aiNumber(c.physical)} · diferencia: ${aiNumber(difference)} · ${c.adjusted ? 'ajustado' : 'pendiente de autorización'} · responsable: ${esc(c.responsible || 'No indicado')}</li>`;
+    }).join('');
+    return [`<strong>Conteos cíclicos recientes</strong><ul>${list}</ul>`, [['Ir a conteo', 'conteo']]];
+  }
+  if (has(/venc|caduc|expir|fefo|lote/)) {
+    let lotsToShow;
+    if (matches.length) {
+      const productIds = new Set(matches.map(p => p.id));
+      const skus = new Set(matches.map(p => norm(p.sku)));
+      lotsToShow = lots.filter(l => Number(l.qty) > 0 && (productIds.has(l.productId) || skus.has(norm(l.sku))));
+      if (has(/vencido|caducado|expirado/) && !has(/por vencer|proximo/)) lotsToShow = lotsToShow.filter(l => l.expiry && Number.isFinite(days(l.expiry)) && days(l.expiry) < 0);
+      else if (has(/proximo|por vencer/)) lotsToShow = lotsToShow.filter(l => l.expiry && Number.isFinite(days(l.expiry)) && days(l.expiry) >= 0 && days(l.expiry) <= issues.windowDays);
+    } else {
+      lotsToShow = has(/vencido|caducado|expirado/) && !has(/por vencer|proximo/)
+        ? issues.expired
+        : [...issues.expired, ...issues.soon, ...issues.unconfirmedLots];
+    }
+    lotsToShow = [...new Map(lotsToShow.map(l => [l.id, l])).values()].sort((a, b) => String(a.expiry || '9999').localeCompare(String(b.expiry || '9999')));
+    if (!lotsToShow.length) return ['No hay lotes que coincidan con esa consulta en los datos actuales.', [['Ver lotes', 'lotes']]];
+    return [`<strong>${lotsToShow.length} lote(s) para revisar</strong><ul>${lotsToShow.slice(0, 10).map(aiLotLine).join('')}</ul>`, [['Ver lotes FEFO', 'lotes']]];
+  }
+  if (has(/reponer|reposicion|pedido|comprar|compra|rop|bajo stock|agotado/)) {
+    return [aiReorderAnswer(matches.length ? matches : products), [['Ver reposición y ABC', 'reposicion'], ['Ver productos', 'productos']]];
+  }
+  if (has(/valor|valoriz|cuanta plata|cuanto vale|costo total|inventario total/)) {
+    const active = products.filter(p => p.active !== false);
+    const value = active.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.price) || 0), 0);
+    const top = [...active].sort((a, b) => (Number(b.stock) || 0) * (Number(b.price) || 0) - (Number(a.stock) || 0) * (Number(a.price) || 0)).slice(0, 5);
+    const list = top.map(p => `<li>${esc(p.name)} (${esc(p.sku)}): ${aiNumber(p.stock)} ${esc(p.unit)} × ${clp(p.price)} = ${clp(Number(p.stock || 0) * Number(p.price || 0))}</li>`).join('');
+    return [`Valorización estimada del inventario activo: <strong>${clp(value)}</strong> en ${active.length} producto(s).<br><strong>Mayor valor en stock:</strong><ul>${list || '<li>Sin productos activos.</li>'}</ul>`, [['Ver reporte valorizado', 'reportes']]];
+  }
+  if (has(/resumen|inventario|panorama|existencias|que hay|stock total|cuantos productos|productos hay/) && !matches.length) {
+    if (!products.length) return ['El inventario sincronizado aún no tiene productos. No se muestran aquí los datos locales que no se hayan cargado a Firestore.', [['Ver productos', 'productos']]];
+    return [aiInventorySummary(), [['Ver productos', 'productos'], ['Ver reportes', 'reportes']]];
+  }
+  if (has(/direccion|temporada|horario|meta de|objetivo/)) {
+    return [`<strong>Configuración registrada</strong><br>Dirección: ${esc(settings.address || 'Sin registrar')}<br>Temporada: ${esc(settings.season || 'Sin registrar')}<br>Horario de mayor demanda: ${esc(settings.demandPeaks || 'Sin registrar')}<br>Ventana de vencimiento: ${aiNumber(settings.expiryWindow ?? 3)} día(s)<br>Meta de exactitud: ${aiNumber(settings.targetAccuracy ?? 0)}%.`, [['Ver configuración', 'configuracion']]];
+  }
+  if (has(/responsable|encargado|personal|equipo/)) {
+    const list = people.map(person => `<li><strong>${esc(person.name)}</strong> · ${esc(person.role || 'Rol sin registrar')}</li>`).join('');
+    return [list ? `<strong>Responsables registrados</strong><ul>${list}</ul>` : 'No hay responsables registrados en el sistema.', [['Ver responsables', 'responsables']]];
+  }
+  if (has(/catalogo|listado|lista de productos|productos registrados/)) {
+    const active = products.filter(p => p.active !== false);
+    const list = active.slice(0, 12).map(p => `<li>${esc(p.sku)} · ${esc(p.name)} · ${aiNumber(p.stock)} ${esc(p.unit)}</li>`).join('');
+    return [`<strong>${active.length} producto(s) activo(s)</strong><ul>${list}</ul>${active.length > 12 ? '<small>Mostrando los primeros 12; filtra el catálogo por SKU o nombre para buscar uno en particular.</small>' : ''}`, [['Ver catálogo', 'productos']]];
+  }
+  if (has(/abc|clasificacion/)) {
+    const active = products.filter(p => p.active !== false);
+    const groups = ['A', 'B', 'C'].map(group => {
+      const rows = active.filter(p => p.abc === group);
+      const value = rows.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.price) || 0), 0);
+      return `<li><strong>Clase ${group}</strong>: ${rows.length} producto(s) · ${clp(value)} valorizados</li>`;
+    }).join('');
+    return [`<strong>Clasificación ABC del inventario activo</strong><ul>${groups}</ul>`, [['Ver reposición y ABC', 'reposicion']]];
+  }
+  if (matches.length) {
+    const cards = matches.slice(0, 5).map(aiProductCard).join('<hr>');
+    const extra = matches.length > 5 ? `<p>Mostrando 5 de ${matches.length} coincidencias; afina la búsqueda por nombre o SKU.</p>` : '';
+    return [`${cards}${extra}`, [['Ver productos', 'productos'], ['Ver ubicaciones', 'ubicaciones']]];
+  }
+  if (terms.length) return [`No encontré coincidencias para “${esc(q.trim())}”. Prueba con el nombre exacto o el SKU, o revisa el catálogo de productos.`, [['Buscar productos', 'productos']]];
+  return ['Puedo resumir el inventario, buscar un producto por nombre o SKU, revisar lotes y vencimientos, sugerir reposición y consultar proveedores, movimientos y conteos. Las respuestas se calculan con los datos actuales del WMS.', [['Ver inventario', 'productos'], ['Ver alertas', 'lotes']]];
 }
+
 function aiSend(q) {
   q = q.trim(); if (!q) return;
   aiSay('user', esc(q));
   const [html, acts] = aiAnswer(q); setTimeout(() => aiSay('bot', html, acts), 250);
 }
+
 function aiRefresh() {
-  const I = aiIssues(), b = $('#wms-ai-badge');
-  b.textContent = I.total; b.hidden = !I.total;
-  const row = (ic, txt, go) => `<div class="wms-msg bot">${ic} ${txt}${go ? `<div class="wms-ai-actions"><button type="button" class="wms-chip-btn" data-go-ai="${go[1]}">${go[0]}</button></div>` : ''}</div>`;
+  const issues = aiIssues(), badge = $('#wms-ai-badge');
+  badge.textContent = issues.total > 99 ? '99+' : issues.total;
+  badge.hidden = !issues.total;
+  const row = (icon, title, detail, action, view) => `<div class="wms-msg bot">${icon} <strong>${title}</strong><br>${detail}<div class="wms-ai-actions"><button type="button" class="wms-chip-btn" data-go-ai="${view}">${action}</button></div></div>`;
   const rows = [];
-  if (I.expired.length) rows.push(row('⚠️', `<strong>${I.expired.length}</strong> lote(s) vencido(s). Sácalos de la venta o regístralos como merma.`, ['Ver lotes', 'lotes']));
-  if (I.soon.length) rows.push(row('⏳', `<strong>${I.soon.length}</strong> lote(s) vencen en ${settings.expiryWindow} días o menos. Úsalos primero (FEFO).`, ['Ver lotes', 'lotes']));
-  if (I.rop.length) rows.push(row('📦', `<strong>${I.rop.length}</strong> producto(s) bajo el punto de reposición.`, ['Ver reposición', 'reposicion']));
-  if (I.pend.length) rows.push(row('📝', `<strong>${I.pend.length}</strong> producto(s) pendientes de confirmar.`, ['Confirmar', 'productos']));
-  if (I.diffs.length) rows.push(row('🔢', `<strong>${I.diffs.length}</strong> diferencia(s) de conteo sin ajustar.`, ['Ir a conteo', 'conteo']));
-  $('#wms-ai-view-diag').innerHTML = rows.join('') || row('✅', 'Sin problemas detectados. La bodega está al día.');
+  if (issues.expired.length) rows.push(row('⛔', `${issues.expired.length} lote(s) vencido(s)`, 'Revisa su estado y registra merma o baja según corresponda.', 'Revisar lotes', 'lotes'));
+  if (issues.soon.length) rows.push(row('⏳', `${issues.soon.length} lote(s) por vencer`, `Vencen dentro de ${issues.windowDays} día(s); prioriza su salida con FEFO.`, 'Ver lotes', 'lotes'));
+  if (issues.lowStock.length) rows.push(row('📦', `${issues.lowStock.length} producto(s) bajo ROP`, 'Revisa las cantidades sugeridas antes de confirmar pedidos.', 'Ver reposición', 'reposicion'));
+  if (issues.unconfirmedLots.length) rows.push(row('🔎', `${issues.unconfirmedLots.length} lote(s) por verificar`, 'Confirma código, fecha de vencimiento y cantidad.', 'Revisar lotes', 'lotes'));
+  if (issues.countDifferences.length) rows.push(row('🔢', `${issues.countDifferences.length} diferencia(s) de conteo`, 'Hay conteos pendientes de autorización o ajuste.', 'Ver conteos', 'conteo'));
+  if (issues.noExpiry.length) rows.push(row('📅', `${issues.noExpiry.length} producto(s) sin vencimiento`, 'Completa la fecha en la ficha o confirma que no aplica.', 'Completar productos', 'productos'));
+  if (issues.missingSupplier.length) rows.push(row('🏷️', `${issues.missingSupplier.length} producto(s) sin proveedor`, 'Asigna un proveedor para facilitar la reposición.', 'Ver productos', 'productos'));
+  if (!rows.length) {
+    rows.push(products.length
+      ? row('✅', 'Sin alertas detectadas', 'No se encontraron vencimientos, diferencias o productos bajo ROP con los datos actuales.', 'Ver inventario', 'productos')
+      : row('ℹ️', 'Inventario sin datos', 'Aún no hay productos cargados en el inventario sincronizado.', 'Ver productos', 'productos'));
+  }
+  $('#wms-ai-view-diag').innerHTML = rows.join('');
 }
 const _renderAll = renderAll;
 renderAll = function () { _renderAll(); aiRefresh(); };
 
 $('#wms-ai-view-tours').innerHTML = [
   ['Registrar una recepción', 'Elige “Recepción”, completa proveedor, guía, lote, vencimiento y ubicación.', 'operaciones'],
-  ['Cambiar un SKU, precio o vencimiento', 'Edita directamente en la tabla de productos; se guarda solo.', 'productos'],
+  ['Editar la ficha de producto', 'En Productos e inventario, elige “Ficha” para cambiar nombre, SKU, precio, proveedor, stock o datos de reposición.', 'productos'],
+  ['Revisar vencimientos FEFO', 'Consulta lotes por fecha y verifica los que están próximos a vencer o pendientes de confirmar.', 'lotes'],
   ['Reubicar un producto', 'En el mapa, usa “Mover a” dentro de la tarjeta del producto.', 'ubicaciones'],
-  ['Editar pedido sugerido o costo', 'En Reposición y ABC puedes escribir cantidades o costos personalizados.', 'reposicion']
+  ['Revisar reposición', 'En Reposición y ABC compara el stock con el ROP y ajusta el pedido sugerido o su costo.', 'reposicion'],
+  ['Consultar movimientos', 'En Reportes revisa recepciones, producción, ventas, mermas y ajustes registrados.', 'reportes'],
+  ['Revisar conteos', 'Registra cantidades físicas y deja diferencias pendientes de autorización antes de ajustar stock.', 'conteo']
 ].map(t => `<div class="wms-msg bot"><strong>${t[0]}</strong><br>${t[1]}<div class="wms-ai-actions"><button type="button" class="wms-chip-btn" data-go-ai="${t[2]}">Ir allí</button></div></div>`).join('');
 
 function aiToggle(open) {
@@ -1969,7 +2182,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-go-ai]');
   if (b) { navigate(b.dataset.goAi); if (innerWidth < 700) aiToggle(false); }
 });
-aiSay('bot', 'Hola 👋 Soy el copiloto de la bodega. Pregúntame por ubicación, stock, precio o vencimiento de cualquier producto.');
+aiSay('bot', 'Hola 👋 Soy el copiloto de bodega. Respondo con los datos actuales del WMS: existencias, ubicaciones, lotes FEFO, reposición, proveedores, movimientos y conteos. Puedes buscar por nombre o SKU, y usar las sugerencias para empezar.');
 aiRefresh();
 </script>
 <script>
