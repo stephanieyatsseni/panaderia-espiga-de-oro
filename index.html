@@ -99,9 +99,34 @@ tbody tr:hover td{background:#fafbf7}
 .wms-ai-header button{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer}
 .wms-msg hr{border:0;border-top:1px solid #e3e9e0;margin:8px 0}
 .wms-ai-footer input{min-width:0}
+body:not(.cloud-authenticated) .app,body:not(.cloud-authenticated) #modal,body:not(.cloud-authenticated) #wms-ai-launcher,body:not(.cloud-authenticated) #wms-ai-drawer{display:none!important}
+.cloud-auth-gate{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#193e32,#245845);font-family:"Work Sans",system-ui,sans-serif}
+.cloud-auth-gate[hidden]{display:none}
+.cloud-auth-card{width:min(420px,100%);background:#fff;border-radius:18px;padding:28px;box-shadow:0 20px 60px #10291f55}
+.cloud-auth-card h1{margin:0 0 8px;font-size:23px;color:#193e32}
+.cloud-auth-card p{color:#61716a;font-size:13px}
+.cloud-auth-card label{display:block;margin:14px 0 5px;font-weight:700;font-size:12px}
+.cloud-auth-card input{width:100%;padding:11px;border:1px solid #cbd6cb;border-radius:9px}
+.cloud-auth-card button{width:100%;margin-top:16px}
+.cloud-auth-error{min-height:20px;color:#a8372a;font-size:12px}
+.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cloud-status{font-size:11px;color:#61716a}
 </style>
 </head>
 <body>
+<div id="cloud-auth-gate" class="cloud-auth-gate">
+  <form id="cloud-signin-form" class="cloud-auth-card">
+    <h1>WMS Panadería Espiga de Oro</h1>
+    <p>Inicia sesión para acceder al inventario compartido.</p>
+    <label for="cloud-email">Correo electrónico</label>
+    <input id="cloud-email" type="email" autocomplete="username" required>
+    <label for="cloud-password">Contraseña</label>
+    <input id="cloud-password" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Iniciar sesión</button>
+    <div id="cloud-auth-error" class="cloud-auth-error" role="status" aria-live="polite"></div>
+    <button id="cloud-retry" class="btn alt" type="button" hidden>Reintentar conexión</button>
+  </form>
+</div>
 <div class="app">
 <aside class="sidebar no-print">
   <div class="brand">
@@ -121,13 +146,15 @@ tbody tr:hover td{background:#fafbf7}
       <button type="button" class="btn alt" onclick="navigate('ubicaciones')">Mapa de Bodega, Racks y Niveles</button>
       <button type="button" class="btn alt" onclick="navigate('ayuda')">Ayuda</button>
       <button type="button" class="btn" onclick="navigate('operaciones')">+ Registrar movimiento</button>
+      <button type="button" class="btn alt" id="cloud-signout">Cerrar sesión</button>
     </div>
   </header>
 
   <p class="notice small mb-4">
-    <strong>Sistema WMS Operativo:</strong> Gestión completa de inventario, precios unitarios por producto, fechas de vencimiento trazables y control de ubicación por Bodega, Rack y Nivel. Todos los cambios se guardan automáticamente en tu navegador.
+    <strong>Sistema WMS Operativo:</strong> Gestión completa de inventario, precios unitarios por producto, fechas de vencimiento trazables y control de ubicación por Bodega, Rack y Nivel.
   </p>
   <div id="message" role="status" aria-live="polite" class="small mb-2"></div>
+  <div id="cloud-sync-status" class="cloud-status mb-3" role="status" aria-live="polite"></div>
 
   <main>
     <!-- TABLERO -->
@@ -369,10 +396,11 @@ tbody tr:hover td{background:#fafbf7}
 
 <!-- Firebase: agregar aquí, antes del script principal -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
   const firebaseConfig = {
-    apiKey: "TU_API_KEY",
+    apiKey: "AIzaSyArPBL8ttVtDK3OMommcqN4X3YM3xDyCiU",
     authDomain: "wms-espiga-de-oro.firebaseapp.com",
     projectId: "wms-espiga-de-oro",
     storageBucket: "wms-espiga-de-oro.firebasestorage.app",
@@ -383,9 +411,9 @@ tbody tr:hover td{background:#fafbf7}
 
   const firebaseApp = firebase.initializeApp(firebaseConfig);
   const firestoreDb = firebase.firestore();
+  firestoreDb.settings({ignoreUndefinedProperties: true});
 </script>
 
-<!-- Este es tu script original: déjalo intacto -->
 <script>
 // ==================== BASE: ESTADO Y UTILIDADES ====================
 const KEY = 'wms-espiga-v4';
@@ -437,7 +465,7 @@ function seed() {
     ['Insumos Pastelería del Sur','Lunes','Jueves',3],
     ['Envases y Empaques Chile','Quincenal','Viernes',4]
   ].map(([name, orders, delivery, lead]) => ({id: uid(), name, orders, delivery, lead}));
-  
+
   people = [
     ['Angélica Mesa','Propietaria y Administración'],
     ['Camila Rojas','Jefa de bodega'],
@@ -1940,6 +1968,336 @@ document.addEventListener('click', e => {
 });
 aiSay('bot', 'Hola 👋 Soy el copiloto de la bodega. Pregúntame por ubicación, stock, precio o vencimiento de cualquier producto.');
 aiRefresh();
+</script>
+<script>
+const cloudAuth = firebase.auth();
+const cloudRoot = firestoreDb.collection('wmsData').doc('espiga-oro');
+const cloudArrayNames = ['products', 'lots', 'suppliers', 'locations', 'people', 'counts', 'movements'];
+const cloudListenerNames = [...cloudArrayNames, 'settings'];
+const cloudLocalBackupKey = KEY + '-local-backup';
+let cloudReady = false;
+let cloudApplying = false;
+let cloudPendingWrites = 0;
+let cloudListeners = [];
+let cloudLatest = {};
+let cloudBaseline = null;
+let cloudLastQueuedState = null;
+let cloudWriteQueue = Promise.resolve();
+let cloudInitialising = false;
+
+function cloudClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function cloudCaptureState() {
+  return {
+    products: cloudClone(products),
+    lots: cloudClone(lots),
+    suppliers: cloudClone(suppliers),
+    locations: cloudClone(locations),
+    people: cloudClone(people),
+    counts: cloudClone(counts),
+    movements: cloudClone(movements),
+    settings: cloudClone(settings)
+  };
+}
+
+function cloudStable(value) {
+  if (Array.isArray(value)) return '[' + value.map(cloudStable).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + cloudStable(value[key])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+function cloudApplyState(state) {
+  cloudApplying = true;
+  products = state.products || [];
+  lots = state.lots || [];
+  suppliers = state.suppliers || [];
+  locations = state.locations || [];
+  people = state.people || [];
+  counts = state.counts || [];
+  movements = state.movements || [];
+  settings = state.settings || {};
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error('No se pudo guardar la copia local del WMS.', error);
+  }
+  renderAll();
+  renderMoveForm();
+  renderCountForm();
+  cloudApplying = false;
+}
+
+function cloudPreserveLocalData() {
+  const localState = localStorage.getItem(KEY);
+  if (localState && !localStorage.getItem(cloudLocalBackupKey)) {
+    localStorage.setItem(cloudLocalBackupKey, localState);
+  }
+}
+
+function cloudSetStatus(text, isError = false) {
+  const status = document.getElementById('cloud-sync-status');
+  if (status) {
+    status.textContent = text;
+    status.style.color = isError ? '#a8372a' : '';
+  }
+}
+
+function cloudBuildState() {
+  return {
+    products: cloudLatest.products || [],
+    lots: cloudLatest.lots || [],
+    suppliers: cloudLatest.suppliers || [],
+    locations: cloudLatest.locations || [],
+    people: cloudLatest.people || [],
+    counts: cloudLatest.counts || [],
+    movements: cloudLatest.movements || [],
+    settings: cloudLatest.settings || {}
+  };
+}
+
+function cloudDocRef(name, id) {
+  if (name === 'settings') return cloudRoot.collection('settings').doc('main');
+  return cloudRoot.collection(name).doc(String(id));
+}
+
+function cloudInstallListeners() {
+  return new Promise((resolve, reject) => {
+    const waiting = new Set(cloudListenerNames);
+    let settled = false;
+    const fail = error => {
+      if (!settled) {
+        settled = true;
+        cloudListeners.forEach(unsubscribe => unsubscribe());
+        cloudListeners = [];
+        reject(error);
+      } else {
+        console.error('Error de sincronización de Firestore.', error);
+        cloudSetStatus('Se perdió la conexión con la nube. Revisa tu conexión.', true);
+      }
+    };
+    const receive = (name, value) => {
+      cloudLatest[name] = value;
+      waiting.delete(name);
+      if (waiting.size === 0 && !settled) {
+        settled = true;
+        cloudReady = true;
+        cloudBaseline = cloudClone(cloudBuildState());
+        cloudLastQueuedState = cloudClone(cloudBaseline);
+        cloudApplyState(cloudBaseline);
+        resolve();
+      } else if (settled && cloudReady) {
+        cloudBaseline = cloudClone(cloudBuildState());
+        if (cloudPendingWrites === 0) {
+          cloudLastQueuedState = cloudClone(cloudBaseline);
+          cloudApplyState(cloudBaseline);
+        }
+      }
+    };
+
+    cloudListeners = cloudArrayNames.map(name => cloudRoot.collection(name).onSnapshot(snapshot => {
+      cloudLatest[name] = snapshot.docs.map(doc => doc.data());
+      if (!snapshot.metadata.hasPendingWrites) receive(name, cloudLatest[name]);
+    }, fail));
+
+    cloudListeners.push(cloudDocRef('settings').onSnapshot(snapshot => {
+      cloudLatest.settings = snapshot.exists ? snapshot.data() : {};
+      if (!snapshot.metadata.hasPendingWrites) receive('settings', cloudLatest.settings);
+    }, fail));
+  });
+}
+
+function cloudDiff(base, target) {
+  const changes = [];
+  cloudArrayNames.forEach(name => {
+    const before = new Map((base[name] || []).map(record => [String(record.id), record]));
+    const after = new Map((target[name] || []).map(record => [String(record.id), record]));
+    const ids = new Set([...before.keys(), ...after.keys()]);
+    ids.forEach(id => {
+      const oldRecord = before.get(id);
+      const newRecord = after.get(id);
+      if (cloudStable(oldRecord) !== cloudStable(newRecord)) {
+        changes.push({name, id, before: oldRecord, after: newRecord});
+      }
+    });
+  });
+  if (cloudStable(base.settings) !== cloudStable(target.settings)) {
+    changes.push({name: 'settings', id: 'main', before: base.settings, after: target.settings});
+  }
+  return changes;
+}
+
+async function cloudCommitChanges(base, target) {
+  const changes = cloudDiff(base, target);
+  if (!changes.length) return;
+  if (changes.length > 450) throw new Error('Este cambio contiene demasiados registros para guardarse en una sola operación.');
+
+  await firestoreDb.runTransaction(async transaction => {
+    const currentDocs = [];
+    for (const change of changes) {
+      currentDocs.push(await transaction.get(cloudDocRef(change.name, change.id)));
+    }
+    for (let index = 0; index < changes.length; index++) {
+      const change = changes[index], current = currentDocs[index];
+      if (current.exists !== (change.before !== undefined) ||
+          (current.exists && cloudStable(current.data()) !== cloudStable(change.before))) {
+        const conflict = new Error('Otro usuario cambió este registro. Se actualizará la pantalla con la versión más reciente; vuelve a intentar tu cambio.');
+        conflict.code = 'wms/conflict';
+        throw conflict;
+      }
+    }
+    changes.forEach(change => {
+      const ref = cloudDocRef(change.name, change.id);
+      if (change.after === undefined) transaction.delete(ref);
+      else transaction.set(ref, change.after);
+    });
+  });
+
+  cloudBaseline = cloudClone(cloudBaseline || base);
+  changes.forEach(change => {
+    if (change.name === 'settings') {
+      cloudBaseline.settings = cloudClone(change.after || {});
+      return;
+    }
+    const records = cloudBaseline[change.name] || [];
+    const index = records.findIndex(record => String(record.id) === change.id);
+    if (change.after === undefined) {
+      if (index >= 0) records.splice(index, 1);
+    } else if (index >= 0) {
+      records[index] = cloudClone(change.after);
+    } else {
+      records.push(cloudClone(change.after));
+    }
+    cloudBaseline[change.name] = records;
+  });
+}
+
+async function cloudRefreshFromServer() {
+  const snapshots = await Promise.all(cloudArrayNames.map(name => cloudRoot.collection(name).get()));
+  const settingsSnapshot = await cloudDocRef('settings').get();
+  cloudArrayNames.forEach((name, index) => {
+    cloudLatest[name] = snapshots[index].docs.map(doc => doc.data());
+  });
+  cloudLatest.settings = settingsSnapshot.exists ? settingsSnapshot.data() : {};
+  cloudBaseline = cloudClone(cloudBuildState());
+  cloudLastQueuedState = cloudClone(cloudBaseline);
+  cloudApplyState(cloudBaseline);
+}
+
+function saveState() {
+  const target = cloudCaptureState();
+  try {
+    localStorage.setItem(KEY, JSON.stringify(target));
+  } catch (error) {
+    notify('No se pudo guardar una copia local de seguridad.', true);
+  }
+  if (!cloudReady || cloudApplying) return;
+
+  const base = cloudClone(cloudLastQueuedState || cloudBaseline);
+  cloudLastQueuedState = cloudClone(target);
+  cloudPendingWrites++;
+  cloudSetStatus('Guardando cambios en la nube…');
+  cloudWriteQueue = cloudWriteQueue.then(() => cloudCommitChanges(base, target)).then(() => {
+    cloudSetStatus('Conectado · cambios sincronizados en tiempo real');
+  }).catch(async error => {
+    console.error('Error al sincronizar el WMS con Firestore.', error);
+    if (error.code === 'wms/conflict') {
+      try {
+        await cloudRefreshFromServer();
+      } catch (refreshError) {
+        console.error('No se pudo actualizar el estado tras un conflicto.', refreshError);
+      }
+      notify(error.message, true);
+    } else {
+      notify('El cambio quedó en este dispositivo, pero no se sincronizó. Revisa la conexión y las reglas de Firestore.', true);
+      cloudSetStatus('Sin sincronizar · revisa la conexión o las reglas de Firestore', true);
+    }
+  }).then(() => {
+    cloudPendingWrites--;
+    if (cloudPendingWrites === 0 && cloudReady) {
+      const latest = cloudClone(cloudBuildState());
+      cloudBaseline = latest;
+      cloudLastQueuedState = cloudClone(latest);
+      cloudApplyState(latest);
+      cloudSetStatus('Conectado · cambios sincronizados en tiempo real');
+    }
+  });
+}
+
+async function cloudStartSession(user) {
+  if (cloudInitialising) return;
+  cloudInitialising = true;
+  cloudSetStatus('Conectando con la base de datos…');
+  try {
+    cloudPreserveLocalData();
+    await cloudInstallListeners();
+    document.body.classList.add('cloud-authenticated');
+    document.getElementById('cloud-auth-gate').hidden = true;
+    $('#cloud-email').value = '';
+    $('#cloud-password').value = '';
+    const hasCloudRecords = cloudArrayNames.some(name => (cloudLatest[name] || []).length > 0);
+    cloudSetStatus(hasCloudRecords
+      ? 'Conectado · cambios sincronizados en tiempo real'
+      : 'Conectado · Firestore no tiene registros; no se importaron datos locales');
+  } catch (error) {
+    console.error('No se pudo iniciar la sincronización del WMS.', error);
+    document.getElementById('cloud-auth-error').textContent =
+      error.code === 'permission-denied' || error.code === 'firestore/permission-denied'
+        ? 'El acceso a Firestore aún está bloqueado. Hay que configurar las reglas seguras del proyecto.'
+        : 'No se pudo conectar con Firestore. Comprueba internet y vuelve a intentar.';
+    document.getElementById('cloud-retry').hidden = false;
+  } finally {
+    cloudInitialising = false;
+  }
+}
+
+cloudAuth.onAuthStateChanged(user => {
+  if (user) {
+    cloudStartSession(user);
+    return;
+  }
+  cloudReady = false;
+  cloudListeners.forEach(unsubscribe => unsubscribe());
+  cloudListeners = [];
+  document.body.classList.remove('cloud-authenticated');
+  document.getElementById('cloud-auth-gate').hidden = false;
+  cloudSetStatus('Sesión cerrada');
+});
+
+$('#cloud-signin-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const errorBox = $('#cloud-auth-error');
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  errorBox.textContent = '';
+  button.disabled = true;
+  button.textContent = 'Ingresando…';
+  try {
+    await cloudAuth.signInWithEmailAndPassword($('#cloud-email').value.trim(), $('#cloud-password').value);
+  } catch (error) {
+    console.error('No se pudo iniciar sesión.', error);
+    errorBox.textContent = error.code === 'auth/invalid-credential'
+      ? 'Correo o contraseña incorrectos.'
+      : 'No se pudo iniciar sesión. Revisa el correo, la contraseña y tu conexión.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Iniciar sesión';
+  }
+});
+
+$('#cloud-signout').addEventListener('click', () => cloudAuth.signOut().catch(error => {
+  console.error('No se pudo cerrar sesión.', error);
+  notify('No se pudo cerrar la sesión. Inténtalo otra vez.', true);
+}));
+
+$('#cloud-retry').addEventListener('click', () => {
+  $('#cloud-auth-error').textContent = '';
+  $('#cloud-retry').hidden = true;
+  const user = cloudAuth.currentUser;
+  if (user) cloudStartSession(user);
+});
 </script>
 </body>
 </html>
