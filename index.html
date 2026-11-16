@@ -915,6 +915,7 @@ function productDialog(id = null, duplicate = false) {
     if (d.discount > 100) return notify('La rebaja no puede superar 100%.', true);
 
     const oldSku = p ? p.sku : null;
+    const oldName = p ? p.name : null;
     d.sku = sku;
     d.name = name;
     d.warehouse = d.warehouse.trim();
@@ -929,10 +930,12 @@ function productDialog(id = null, duplicate = false) {
     if (p && !duplicate) {
       const diff = d.stock - p.stock;
       Object.assign(p, d);
+      const relatedLots = lots.filter(l => l.productId === p.id || (!l.productId && oldSku && l.sku === oldSku));
       if (oldSku && oldSku !== sku) {
-        lots.filter(l => l.productId === p.id).forEach(l => l.sku = sku);
+        relatedLots.forEach(l => l.sku = sku);
         counts.filter(c => c.productId === p.id).forEach(c => c.sku = sku);
       }
+      if (oldName !== name) relatedLots.forEach(l => l.name = name);
       if (diff) {
         adjustLots(p, diff, 'Actualización desde ficha');
         logMove('Ajuste de ficha', p, diff, {note: 'Stock editado en ficha.', responsible: 'Responsable en turno'});
